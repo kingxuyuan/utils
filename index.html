@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Document</title>
+	</head>
+
+	<body>
+		<button onclick="pause()" style="margin-bottom: 40px; font-size: 40px">
+			暂停
+		</button>
+		<button onclick="start()" style="margin-bottom: 40px; font-size: 40px">
+			开始
+		</button>
+		<script
+			src="//cdn.jsdelivr.net/npm/xgplayer@1.1.4/browser/index.js"
+			charset="utf-8"
+		></script>
+		<script
+			src="//cdn.jsdelivr.net/npm/xgplayer-hls.js/browser/index.js"
+			charset="utf-8"
+		></script>
+		<script src="./sorce.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/rxjs/6.3.3/rxjs.umd.min.js"></script>
+		<!-- <script src="./aa.js"></script>
+        <script src="./bb.js"></script> -->
+		<!-- <script>
+            const difference = (a, b) => {
+                const s = new Set(b);
+                return a.filter((x) => !s.has(x));
+            };
+            console.log(difference(arr1, arr2));
+        </script> -->
+		<script>
+			let index = +localStorage.getItem('startIndex') || 0;
+			let errList = JSON.parse(localStorage.getItem('errorUrl') || '[]');
+			let errIndex = JSON.parse(
+				localStorage.getItem('errorIndex') || '[]',
+			);
+			let canPlay = false;
+			let baseNum = 25; //播放基数
+			let alreadyPlay = []; //当前循环的播放视频数量
+			let subject = rxjs.Subject;
+			let sub = new subject();
+
+			//监听播放数量
+			sub.subscribe((res) => {
+				res();
+				console.log(alreadyPlay);
+				if (alreadyPlay.length === baseNum && index <= arr.length) {
+					nextFn();
+				}
+				console.log(index);
+				if (index % 1000 === 0 && !(+localStorage.getItem('isLoad') || 0)) {
+					localStorage.setItem('isLoad', 1);
+					setTimeout(() => {
+						window.location.reload();
+					}, 1000);
+				}
+			});
+
+			// 暂停
+			function pause() {
+				sub.unsubscribe();
+			}
+			//开始
+			function start() {
+				window.location.reload();
+			}
+
+			// 创建播放容器
+			function createEl() {
+				for (let i = 0; i < baseNum; i++) {
+					index = index + 1;
+					let el = document.createElement('div');
+					el.id = 'mse' + index;
+					document.body.appendChild(el);
+					create(arr[index], el.id, index);
+				}
+			}
+
+			//播放配置和监听错误
+			function create(url, id, curindex) {
+				let result = new Promise((resolve, reject) => {
+					let player = new HlsJsPlayer({
+						id: id,
+						url: url,
+						// url: "https://video-kumi.lcwjjy.com/" + url,
+						autoplay: true,
+					});
+
+					let resultStep = Promise.resolve();
+					// 网络错误
+					resultStep.then(() => {
+						player.hls.on('hlsError', (desc, error) => {
+							//这里可以监听到网络异常
+							// console.log(desc, error, '网络错误...');
+							if (
+								error.type === 'networkError' ||
+								error.type === 'otherError'
+							) {
+								canPlay = true;
+								saveError(curindex);
+								savePlayStatus(player,curindex);
+							}
+						});
+					});
+
+					// 切片错误
+					resultStep.then(() => {
+						player.hls.on('hlsBufferCodecs', (desc, error) => {
+							canPlay = true;
+						});
+					});
+
+					resultStep.then(() => {
+						player.on('canplay', function (val) {
+							savePlayStatus(player,curindex);
+						});
+					});
+
+					resultStep.then(() => {
+						resolve({ canPlay, player ,curindex});
+					});
+				});
+
+				// 其他错误，网络延迟，缓存
+				result.then((canPlay, player,curindex) => {
+					if (!canPlay) {
+						canPlay = false;
+						saveError(curindex);
+						savePlayStatus(player,curindex);
+					}
+				});
+			}
+
+			// 上一组测试完成，下一组开始
+			function nextFn() {
+				alreadyPlay = [];
+				localStorage.setItem('startIndex', index);
+				localStorage.setItem('isLoad', 0);
+				createEl();
+			}
+
+			// 保存错误
+			function saveError(curindex) {
+				if (!errIndex.includes(curindex)) {
+					errIndex.push(curindex);
+					errList.push(arr[curindex]);
+					localStorage.setItem(
+						'errorIndex',
+						JSON.stringify(errIndex),
+					);
+					localStorage.setItem('errorUrl', JSON.stringify(errList));
+				}
+			}
+
+			// 当前播放完毕，销毁播放实例
+			function savePlayStatus(player,curindex) {
+				player.destroy();
+				sub.next(() => {
+					if (!alreadyPlay.includes(curindex))
+						alreadyPlay.push(curindex);
+				});
+			}
+
+			window.onload = () => {
+				createEl();
+			};
+		</script>
+	</body>
+</html>
